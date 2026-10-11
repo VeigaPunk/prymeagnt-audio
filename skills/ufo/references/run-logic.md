@@ -225,7 +225,7 @@ typed:
 | spawn fails: `thinking` level invalid for resolved model | `effort_unsupported` | no hop; typed telemetry; fix tiers between rounds |
 | spawn fails: unknown model selector | `route_unresolvable` | no hop; `rlm.find_models` next time |
 | spawn fails: recursion depth limit | config failure | halt the round; raise `rlmMaxDepth` between rounds (Phase 0 bug) |
-| `agent_message` absent; `rlm.collect(timeout_ms)` elapses | `lane_timeout` | critical seat: exactly one same-identity retry; else UNAVAILABLE |
+| `agent_message` absent; the `rlm.collect` re-poll loop (collect returns immediately — F3) exceeds its deadline | `lane_timeout` | critical seat: exactly one same-identity retry; else UNAVAILABLE |
 | daemon reports child crash | `process_exit` | same rule as `lane_timeout` |
 | auth / permission failure | `authorization_unavailable` | no retry, no hop (auth is not capacity) |
 
@@ -247,8 +247,11 @@ settled wave.
 
 - Results arrive only through `agent_message.send(...,
   receiver_role='parent')`, gathered with `rlm.collect`. `rlm.spawn`
-  returns a handle, never results. A lane claiming a result without a
-  received message has no result.
+  returns a handle, never results. On 0.10.0 `rlm.collect(timeout_ms=…)`
+  returns immediately — `timeout_ms` does not block to settlement
+  (observed: `status: 'running'` returned in 1 ms) — so re-poll until
+  `status: 'done'` (`verification/smoke-test.log`, finding F3). A lane
+  claiming a result without a received message has no result.
 - Each lane writes one scoped report artifact
   (`.ufo/rounds/<runId>/r<NN>/<lane>.md`); the round digest binds their
   hashes. Session transcripts under the agent dir are transport evidence,
@@ -326,16 +329,24 @@ earlier gate blocks widening.
 
 | Tier | Seats | Primary spawn | Capacity fallback chain |
 |---|---|---|---|
-| volume (default) | scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | omit `model` → `subagentDefaultModel` (recommended: `openai-codex/gpt-5.1-codex-mini`) | `model='zai/glm-5.3-flash'` |
+| volume (default) | scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | `model='openai-codex/gpt-5.1-codex-mini'`, always passed explicitly (rule 1 below) | `model='zai/glm-5.3-flash'` |
 | hard reasoning | planner, critic, connector, distiller | `model='xai/grok-4.7', thinking='xhigh'` | `model='zai/glm-5.3'` → volume tier |
 
 Rules:
 
-- Resolution order per spawn: explicit `model=` argument → settings
-  `subagentDefaultModel` → parent-model inheritance (upstream-documented
-  order; verify live behavior on first run and record the observation).
-  Policy: pin `subagentDefaultModel` in settings.json so volume lanes are
-  cheap by default; hard seats always pass explicit arguments.
+- Resolution order per spawn (upstream-documented): explicit `model=`
+  argument → settings `subagentDefaultModel` → parent-model inheritance.
+  Verified live on 0.10.0: `rlm.spawn` does NOT honor
+  `subagentDefaultModel` — with the key set to `gpt-5.1-codex-mini`,
+  children inherited the parent's provider/model/thinking in both probes
+  (zai parent → zai child; kimi-coding parent → kimi-coding child; the
+  child session logs never consult the setting). Evidence:
+  `verification/smoke-test.log`, finding F1; upstream issue #921 tracks
+  the setting (declared-but-unhonored on this build). Policy: volume
+  lanes pass `model='openai-codex/gpt-5.1-codex-mini'` explicitly — an
+  omitted `model=` inherits the parent model and is never the cheap lane.
+  The setting stays in settings.json but is not relied on; hard seats
+  always pass explicit arguments.
 - `thinking` accepts `off|minimal|low|medium|high|xhigh|max`. Each spawn
   records its requested level; a level invalid for the resolved model
   fails the spawn — typed `effort_unsupported`, never silently dropped or

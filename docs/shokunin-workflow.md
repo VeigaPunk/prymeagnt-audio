@@ -169,6 +169,8 @@ git rev-parse HEAD                 # → 9f31e2a... (cited in the report)
 
 ```python
 # Orchestrator, turn 3 — judge every owned axis:
+# (collect returns at once on 0.10.0: timeout_ms does not block to
+#  settlement — re-poll until status 'done' — verification/smoke-test.log F3)
 rlm.collect(timeout_ms=60000)
 # depth: improved — grep re-run → 26 at 9f31e2a (was 22 at a1b2c3d)
 # calibration: unchanged — no claim made, none measured
