@@ -1,0 +1,80 @@
+# Settings template & installers — assumptions and evidence
+
+Target product: prime-agent 0.10.0 (Rust build), live settings at
+`~/.prime/agent/settings.json`. Everything below was observed on this
+machine's install; no public docs consulted.
+
+## Key shapes in config/settings.json
+
+Shapes mirror the live file and the strings embedded in
+`~/.local/share/prime-agent/prime-agent` (struct field lists from serde
+error text):
+
+- `defaultProvider`, `defaultModel`, `subagentDefaultModel`,
+  `auxiliaryModel`, `defaultThinkingLevel`, `providerBackupModel`,
+  `rlmMaxDepth` — plain scalar slots (all `null` in the untouched file).
+  `defaultThinkingLevel` is one of `off|minimal|low|medium|high|xhigh|max`
+  (binary enum strings); `high` chosen.
+- `providerBackupModel` uses the selector form `provider/model-id`
+  (binary: `selectors use the form "provider/model-id"`), same as the
+  existing `recentModels` entries.
+- `agentTraces` is an object: `{"enabled": true}` — matches both the live
+  file and `struct AgentTracesSettings with 1 element` in the binary.
+
+## autoRefine — scalar `true`, watch this one
+
+The tower directive pins the template value to `true`, and the live file's
+`autoRefine` slot is a scalar `null`. However the binary also contains
+`struct AutoRefineSettings with 4 elements`, so the product may expect an
+object (the binary does not reveal the four field names). The template
+ships `true` as directed. If a future prime-agent build rejects the scalar
+on load, flip the template to the object form the binary expects and re-run
+`scripts/apply-settings.sh` — the merge makes that a one-line change.
+
+## Skill discovery path (install-skills.sh default)
+
+Assumption: user skills are discovered at
+`${PRIME_AGENT_CODING_AGENT_DIR:-$HOME/.prime/agent}/skills`.
+
+Evidence:
+
+- The `prime-agent` launcher pins
+  `PRIME_AGENT_CODING_AGENT_DIR="${PRIME_AGENT_CODING_AGENT_DIR:-$HOME/.prime/agent}"`
+  and the binary repeats `.prime/agent` as the user config root while also
+  using a project-relative `.prime/agent` (`package install --local`
+  targets the project config).
+- The build payload ships built-in skills in `share/prime-agent/skills/`
+  (`~/.local/share/prime-agent/skills/` on this machine), i.e. skills are
+  directory-per-skill with `SKILL.md` inside.
+- `~/.prime/agent/skills/` does not exist on a fresh install; the script
+  creates it when the agent dir exists.
+
+The capability survey (mission M1) is confirming the exact discovery path
+in parallel. If it lands on a different directory, pass it as the first
+argument — the script never guesses beyond the default above and fails
+loudly when the agent dir itself is absent.
+
+## Scripts: constraints honored
+
+- bash + coreutils + jq only (`cp`, `mv`, `mktemp`, `mkdir`, `date`,
+  `basename`, `ls`, `printf`).
+- `set -euo pipefail` in both.
+- Secrets are never read or written: credentials live in `auth.json`,
+  which neither script touches; `settings.json` holds no credential
+  material. `apply-settings.sh` writes the merged settings with mode 0600
+  and atomically (temp file + `mv` in the same directory).
+- `apply-settings.sh` honors `PRIME_AGENT_CODING_AGENT_DIR` (same override
+  the launcher uses) plus explicit `SETTINGS_TARGET` / `SETTINGS_TEMPLATE`
+  environment overrides for testing.
+
+## Merge semantics
+
+`jq -s '.[0] * .[1]' existing template` — recursive deep merge where the
+template wins for managed keys and every key not in the template is
+preserved as-is (including nested objects like `telemetry`). Idempotency:
+both sides are canonicalized with `jq -S` and compared; when equal the
+script exits 0 without touching the file (and without creating another
+backup). Backups are named `settings.json.bak-<UTC timestamp>`; two
+modifications landing in the same second get a `.N` suffix so no backup
+is ever overwritten.
+
