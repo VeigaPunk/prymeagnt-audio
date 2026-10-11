@@ -33,12 +33,17 @@ one falsifiable claim, one verifiable improvement, judged per axis.
 
 **(ii) Dispatch floor.** When the work warrants sub-lanes, dispatch **at least
 8 subagents in one turn** — one `rlm.spawn(prompt, name=..., model=...,
-thinking=...)` call per L2 lane, all issued in the same turn; resolve model
-selectors with `rlm.find_models` at dispatch time (planner/connector →
-strongest reasoning; executor/scribe/scout → fast execution; reviewer/critic
-class → economy, fallback fast). Results never return from `spawn`; they
-arrive via `agent_message`. An L2 lane you did not spawn is `not-dispatched` —
-never fabricated.
+thinking=...)` call per L2 lane, all issued in the same turn; resolve
+reasoning-tier model selectors with `rlm.find_models` at dispatch time
+(planner/connector → strongest reasoning; executor/scribe/scout → fast
+execution; reviewer/critic class → economy, fallback fast). Every spawn
+passes `model=` explicitly: on prime-agent 0.10.0 `rlm.spawn` does not honor
+`subagentDefaultModel`, so an omitted `model=` inherits the parent model,
+never the cheap lane — volume and economy lanes pass
+`model='openai-codex/gpt-5.1-codex-mini'` verbatim
+(`verification/smoke-test.log`, finding F1; upstream issue #921). Results
+never return from `spawn`; they arrive via `agent_message`. An L2 lane you
+did not spawn is `not-dispatched` — never fabricated.
 
 **(iii) Commit-then-push ordering.** Commit your round work inside
 `<PROJECT_ROOT>` before anything else that publishes it; the report lands last.
