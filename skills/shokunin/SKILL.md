@@ -66,7 +66,7 @@ Canonical concept | prime-agent surface
 Fleet root `$SHOKUNIN_ROOT` with child repos `<id>-shokunin/` | The project git repo where the lanes work; per-lane books live under `.shokunin/<id>/` in that repo (below). There are **no filesystem agent dirs**.
 A rostered lane | A named **subagent spec** in the global continual-harness store, spawnable via `rlm.spawn(prompt, name=<id>, ...)`
 `scripts/shokunin-watchdog.sh` respawn-per-round driver | In-session round-robin driven by the orchestrator; for unattended runs, `prime-agent --goal "<round-robin objective>"` + `/autonomous on --gate <report-check command>`; the canonical watchdog script remains the headless option with `SUBSTRATE_CMD=prime-agent`
-`shokunin.conf` lane table + host model route table | The harness store is the roster (`rlm.harness.overview(global_=True)`, `rlm.list_subagents()`); model routing resolves per spawn via `rlm.find_models(query, limit=8)` → `.selector`, passed as `model=` / `thinking=` to `rlm.spawn`. On 0.10.0 `rlm.spawn` does NOT honor `subagentDefaultModel` — with no `model=`, children inherit the parent's provider/model/thinking (two-provider probe; child logs never consult the setting) — so every lane passes `model=` explicitly at spawn, and volume/economy lanes pass `model='openai-codex/gpt-5.1-codex-mini'` verbatim (`verification/smoke-test.log`, finding F1; upstream issue #921, declared-but-unhonored on this build)
+`shokunin.conf` lane table + host model route table | The harness store is the roster (`rlm.harness.overview(global_=True)`, `rlm.list_subagents()`); model routing resolves per spawn via `rlm.find_models(query, limit=8)` → `.selector`, passed as `model=` / `thinking=` to `rlm.spawn`. On 0.10.0 `rlm.spawn` does NOT honor `subagentDefaultModel` — with no `model=`, children inherit the parent's provider/model/thinking (two-provider probe; child logs never consult the setting) — so every lane passes `model=` explicitly at spawn, and volume/economy lanes pass `model='openai-codex/gpt-6-luna'` verbatim (retiered 2026-10-11 from `gpt-5.1-codex-mini`: account-gated on ChatGPT-auth codex; `verification/smoke-test.log`, finding F1; upstream issue #921, declared-but-unhonored on this build)
 L2 floor: ≥8 lanes in one batched AgentSwarm call | ≥8 `rlm.spawn` calls issued in one turn, one per L2 lane (prime-agent's kernel queues them; results never return from `spawn` — they arrive via `agent_message`)
 Lane ↔ orchestrator messages | `agent_message.send(..., receiver_role='parent' \| 'child')`; orchestrator gathers with `rlm.collect(timeout_ms=...)` — on 0.10.0 `collect` returns immediately (`timeout_ms` does not block to settlement; observed `status: 'running'` in 1 ms), so re-poll until `status: 'done'` (`verification/smoke-test.log`, finding F3)
 `.ufo/reports/round-<N>/<lane>.md` | `.shokunin/reports/round-<N>/<lane>.md` in the project repo
@@ -160,8 +160,9 @@ recorded in its `SCORECARD.md` and subagent spec.
    aliases. Every spawn passes `model=` explicitly either way — on 0.10.0
    `rlm.spawn` does NOT honor `subagentDefaultModel`, so an omitted `model=`
    inherits the parent model, never the cheap lane — and volume/economy lanes
-   pass `model='openai-codex/gpt-5.1-codex-mini'` verbatim
-   (`verification/smoke-test.log`, finding F1; upstream issue #921). Measure
+   pass `model='openai-codex/gpt-6-luna'` verbatim (retiered 2026-10-11
+   from `gpt-5.1-codex-mini`: account-gated on ChatGPT-auth codex;
+   `verification/smoke-test.log`, finding F1; upstream issue #921). Measure
    on the delivered revision, not intent.
 5. **Judge EVERY axis the lane owns.** Each axis gets a verdict: `improved`,
    `harmed`, `unchanged`, or `unprovable-but-better`. **No scalars** — a number

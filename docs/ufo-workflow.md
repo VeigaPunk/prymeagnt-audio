@@ -28,7 +28,7 @@ The skill re-checks these itself before round 1, but you can pre-verify:
    `~/.prime/agent/settings.json`; raise it in-session with
    `/rlm-max-depth <n>` if needed.
 5. Tier selectors resolve, from the in-session REPL:
-   `rlm.find_models('grok-4.7')` and `rlm.find_models('codex-mini')` each
+   `rlm.find_models('grok-4.7')` and `rlm.find_models('gpt-6-luna')` each
    return entries whose `.selector` is the exact spawn string.
 6. Your gate commands pass on the untouched tree. Never enter round 1 on a
    broken base.
@@ -126,9 +126,11 @@ rlm.spawn(name='r2-critic-lazyload', model='xai/grok-4.7', thinking='xhigh',
 # Volume lanes pass model= explicitly: rlm.spawn does NOT honor the
 # subagentDefaultModel setting on 0.10.0 (verification/smoke-test.log F1) —
 # an omitted model= inherits the parent model, never the cheap lane.
-rlm.spawn(name='r2-scout-imports', model='openai-codex/gpt-5.1-codex-mini',
+# Volume model retiered 2026-10-11 to gpt-6-luna: gpt-5.1-codex-mini is
+# account-gated on ChatGPT-auth codex.
+rlm.spawn(name='r2-scout-imports', model='openai-codex/gpt-6-luna',
           prompt=DIRECTIVE + "Map the import graph.")
-rlm.spawn(name='r2-executor-lazy', model='openai-codex/gpt-5.1-codex-mini',
+rlm.spawn(name='r2-executor-lazy', model='openai-codex/gpt-6-luna',
           prompt=DIRECTIVE + "Implement scoped.")
 
 # Telemetry while lanes run; then gather:
@@ -139,7 +141,9 @@ results = rlm.collect(timeout_ms=600000)   # returns at once on 0.10.0 (F3):
 
 - **Tiers.** Volume seats (scout, reviewer, sentinel, executor,
   mutation-tester, revenger, simplifier, scribe, labrat) run on
-  `openai-codex/gpt-5.1-codex-mini`, passed explicitly at spawn:
+  `openai-codex/gpt-6-luna`, passed explicitly at spawn (retiered
+  2026-10-11 from `gpt-5.1-codex-mini`, which is account-gated on
+  ChatGPT-auth codex):
   `subagentDefaultModel` is declared in settings but NOT honored by
   `rlm.spawn` on 0.10.0 — children inherit the parent model instead
   (upstream issue #921; `verification/smoke-test.log`, finding F1).

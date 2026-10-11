@@ -24,7 +24,7 @@ jq '{defaultProvider, defaultModel, defaultThinkingLevel, subagentDefaultModel,
   ~/.prime/agent/settings.json
 ```
 
-Expected: `openai-codex` / `gpt-6-sol` / `high`, `gpt-5.1-codex-mini` for
+Expected: `openai-codex` / `gpt-6-sol` / `high`, `gpt-6-luna` for
 `subagentDefaultModel` and `auxiliaryModel` (declared-but-unhonored at
 spawn on 0.10.0 — see test 2's model note), `zai/glm-5.3-flash` backup,
 `rlmMaxDepth` 3, `autoRefine.enabled` true, `agentTraces.enabled` true.
@@ -106,7 +106,9 @@ inherits the parent's model/provider/thinking — `subagentDefaultModel` is
 declared in settings but not honored at spawn resolution (upstream issue
 #921). This test therefore proves the spawn/collect mechanism, not
 settings-routed lane models; missions that need the cheap volume lane pass
-`model='openai-codex/gpt-5.1-codex-mini'` explicitly at spawn.
+`model='openai-codex/gpt-6-luna'` explicitly at spawn (retiered
+2026-10-11 from `gpt-5.1-codex-mini`, which is account-gated on
+ChatGPT-auth codex).
 
 ### Test 3 — the refine surface responds (fresh daemon-backed session)
 

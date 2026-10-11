@@ -2,8 +2,8 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-sol",
   "defaultThinkingLevel": "high",
-  "subagentDefaultModel": "gpt-5.1-codex-mini",
-  "auxiliaryModel": "gpt-5.1-codex-mini",
+  "subagentDefaultModel": "gpt-6-luna",
+  "auxiliaryModel": "gpt-6-luna",
   "providerBackupModel": "zai/glm-5.3-flash",
   "rlmMaxDepth": 3,
   "autoRefine": {

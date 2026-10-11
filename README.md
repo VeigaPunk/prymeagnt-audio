@@ -36,7 +36,7 @@ Evidence for every claim about prime-agent behavior lives in
 | Seat / lane | Model | Thinking | Routed by |
 |---|---|---|---|
 | L1 root session, default model | `openai-codex` / `gpt-6-sol` | `high` | `defaultProvider` + `defaultModel` + `defaultThinkingLevel` |
-| Volume RLM lanes — scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | `openai-codex` / `gpt-5.1-codex-mini` | lane's own choice | spawn-arg pinned — pass `model=` explicitly (settings not honored at spawn on this build; see note below) |
+| Volume RLM lanes — scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | `openai-codex` / `gpt-6-luna` | lane's own choice | spawn-arg pinned — pass `model=` explicitly (settings not honored at spawn on this build; see note below) |
 | Hard-reasoning seats — planner, critic, connector, distiller | `xai` / `grok-4.7` | `xhigh` | explicit `rlm.spawn(model='xai/grok-4.7', thinking='xhigh')` per the ufo tier table |
 | Provider backup | `zai` / `glm-5.3-flash` | — | `providerBackupModel` |
 | Volume-tier capacity fallback | `zai` / `glm-5.3-flash` | — | ufo tier fallback chain |
@@ -45,7 +45,7 @@ Evidence for every claim about prime-agent behavior lives in
 **Note (verified on this build):** lane-tier models are spawn-arg-pinned,
 not settings-routed — `rlm.spawn` does not honor `subagentDefaultModel`
 (declared-but-unhonored on 0.10.0, upstream issue #921); volume lanes must
-pass `model='openai-codex/gpt-5.1-codex-mini'` explicitly at spawn or they
+pass `model='openai-codex/gpt-6-luna'` explicitly at spawn or they
 inherit the parent model. Evidence: `verification/smoke-test.log`, finding F1.
 
 Per-spawn model resolution order (capability survey §2): explicit `model=`
@@ -55,6 +55,16 @@ the setting step is skipped in practice — spawn resolution never consults
 only reliable route; hard seats always pass explicit arguments. A `thinking`
 level the resolved model does not support fails the spawn as a typed
 `effort_unsupported` outcome — it is never silently clamped.
+
+**Availability (verified live 2026-10-11):** `openai-codex/gpt-6-sol`,
+`openai-codex/gpt-6-luna`, `xai/grok-4.7`, `xai/grok-code-fast-1`,
+`kimi-coding/k3`, `zai/glm-5.3`, and `zai/glm-5.3-flash` all work on this
+install. Blocked: `prime-inference` entirely (402 Insufficient balance on
+the personal `PRIME_API_KEY` balance, all models), and the codex
+ChatGPT-account gate — `openai-codex/gpt-5.1-codex-mini`, `gpt-5.1`, and
+`gpt-5.4-mini` return "not supported when using Codex with a ChatGPT
+account". That gate is why the volume tier moved from `gpt-5.1-codex-mini`
+to `gpt-6-luna` (retier B0109, 2026-10-11).
 
 Other managed keys: `rlmMaxDepth: 3` (ufo needs ≥ 2 so the executor's depth-2
 `labrat` can spawn; `rlmMaxDepth` is daemon-enforced),

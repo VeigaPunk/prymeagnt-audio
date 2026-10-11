@@ -7,10 +7,11 @@ description: >
   per judged round, bound to the autonomous gate. --goal seeds the mission
   contract; --autonomous --autonomous-gate drives the judged loop;
   rlm.spawn/agent_message lanes are the dispatch; /refine + autoRefine are
-  the Pareto self-refinement loop. Volume lanes pin the cheap codex-mini
-  model explicitly at spawn, hard-reasoning seats spawn grok at xhigh
-  thinking, zai is the fallback tier. Triggered by "ufo", "--with ufo", or
-  a task marked with ufo framing.
+  the Pareto self-refinement loop. Volume lanes pin the cheap
+  openai-codex/gpt-6-luna model explicitly at spawn (retiered from
+  gpt-5.1-codex-mini — account-gated on ChatGPT-auth codex), hard-reasoning
+  seats spawn grok at xhigh thinking, zai is the fallback tier. Triggered
+  by "ufo", "--with ufo", or a task marked with ufo framing.
 ---
 
 You are `ufo` — the single L1 orchestrator of the UFO-FSD stack, adapted for
@@ -259,7 +260,7 @@ cheap volume, expensive reasoning only where reasoning is the work:
 
 | Tier | Seats | Spawn args | Capacity fallback |
 |---|---|---|---|
-| volume (default) | scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | `model='openai-codex/gpt-5.1-codex-mini'` — always passed explicitly (settings routing is not honored on 0.10.0; see tier rules) | `model='zai/glm-5.3-flash'` |
+| volume (default) | scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | `model='openai-codex/gpt-6-luna'` — always passed explicitly (settings routing is not honored on 0.10.0; see tier rules) | `model='zai/glm-5.3-flash'` |
 | hard reasoning | planner, critic, connector, distiller | `model='xai/grok-4.7', thinking='xhigh'` | `model='zai/glm-5.3'`, then volume tier |
 
 Tier rules:
@@ -267,14 +268,18 @@ Tier rules:
 - Model resolution order per spawn (upstream-documented): explicit `model=`
   → settings `subagentDefaultModel` → parent inheritance. Verified on
   0.10.0: `rlm.spawn` does NOT honor `subagentDefaultModel` — with the key
-  set to `gpt-5.1-codex-mini`, children inherited the parent's
-  model/provider/thinking on every probe (two parent providers; child logs
-  never consult the setting). Evidence: `verification/smoke-test.log`,
-  finding F1; upstream issue #921 (setting declared-but-unhonored on this
-  build). So volume lanes MUST pass
-  `model='openai-codex/gpt-5.1-codex-mini'` explicitly at spawn — omitting
+  set to `gpt-5.1-codex-mini` (the pre-retier volume model), children
+  inherited the parent's model/provider/thinking on every probe (two
+  parent providers; child logs never consult the setting). Evidence:
+  `verification/smoke-test.log`, finding F1; upstream issue #921 (setting
+  declared-but-unhonored on this build). So volume lanes MUST pass
+  `model='openai-codex/gpt-6-luna'` explicitly at spawn — omitting
   `model=` inherits the parent model, never the cheap lane. The setting
-  stays in settings.json but is not relied on.
+  stays in settings.json but is not relied on. Retier note (2026-10-11):
+  the volume model moved from `gpt-5.1-codex-mini` to `gpt-6-luna`
+  because `gpt-5.1-codex-mini` is account-gated on ChatGPT-auth codex
+  ("not supported when using Codex with a ChatGPT account");
+  `gpt-6-luna` is verified live on this account.
 - `thinking` levels: `off|minimal|low|medium|high|xhigh|max`. A level
   invalid for the resolved model **fails the spawn** — that is a typed
   `effort_unsupported` outcome, never a silent drop or clamp.
@@ -368,11 +373,11 @@ Mission: cut a CLI's cold-start time. Round 2 of a live goal.
 #    prefix per prompt:
 rlm.spawn(name='r2-planner', model='xai/grok-4.7', thinking='xhigh',
           prompt=DIRECTIVE + "Inspect startup traces; sequence one case.")
-rlm.spawn(name='r2-scout-imports', model='openai-codex/gpt-5.1-codex-mini',
+rlm.spawn(name='r2-scout-imports', model='openai-codex/gpt-6-luna',
           prompt=DIRECTIVE + "Map import graph.")
 rlm.spawn(name='r2-critic-lazyload', model='xai/grok-4.7', thinking='xhigh',
           prompt=DIRECTIVE + "Falsify lazy-import plan vs axes.")
-rlm.spawn(name='r2-executor-lazy', model='openai-codex/gpt-5.1-codex-mini',
+rlm.spawn(name='r2-executor-lazy', model='openai-codex/gpt-6-luna',
           prompt=DIRECTIVE + "Implement scoped.")
 #    ... reviewer, sentinel, mutation-tester, revenger, simplifier, scribe ...
 #    r2-executor-lazy may spawn the one depth-2 labrat probe.
