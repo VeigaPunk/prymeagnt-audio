@@ -110,7 +110,11 @@ A wave is one parallel batch of `rlm.spawn` calls — all lanes fire together,
 never dribbled. `rlm.spawn` returns a handle, never results: lanes send
 results to the parent with
 `agent_message.send(..., receiver_role='parent')`, gathered with
-`rlm.collect(targets, timeout_ms)`. Wave N+1 launches only as wave N settles.
+`rlm.collect(targets, timeout_ms)`. On 0.10.0 `collect` returns
+immediately — `timeout_ms` does not block to settlement (observed:
+`status: 'running'` returned in 1 ms) — so re-poll until `status: 'done'`
+(`verification/smoke-test.log`, finding F3). Wave N+1 launches only as
+wave N settles.
 
 ```python
 # Hard-reasoning seats pass explicit args (tier table in skills/ufo/SKILL.md):
@@ -119,18 +123,26 @@ rlm.spawn(name='r2-planner', model='xai/grok-4.7', thinking='xhigh',
 rlm.spawn(name='r2-critic-lazyload', model='xai/grok-4.7', thinking='xhigh',
           prompt=DIRECTIVE + "Falsify the lazy-import plan against the axes.")
 
-# Volume lanes omit model= -> subagentDefaultModel (gpt-5.1-codex-mini):
-rlm.spawn(name='r2-scout-imports', prompt=DIRECTIVE + "Map the import graph.")
-rlm.spawn(name='r2-executor-lazy', prompt=DIRECTIVE + "Implement scoped.")
+# Volume lanes pass model= explicitly: rlm.spawn does NOT honor the
+# subagentDefaultModel setting on 0.10.0 (verification/smoke-test.log F1) —
+# an omitted model= inherits the parent model, never the cheap lane.
+rlm.spawn(name='r2-scout-imports', model='openai-codex/gpt-5.1-codex-mini',
+          prompt=DIRECTIVE + "Map the import graph.")
+rlm.spawn(name='r2-executor-lazy', model='openai-codex/gpt-5.1-codex-mini',
+          prompt=DIRECTIVE + "Implement scoped.")
 
 # Telemetry while lanes run; then gather:
 rlm.progress_note("r2 wave fired: 10 lanes, tiers v9/h4")
-results = rlm.collect(timeout_ms=600000)
+results = rlm.collect(timeout_ms=600000)   # returns at once on 0.10.0 (F3):
+                                           # re-poll until status 'done'
 ```
 
 - **Tiers.** Volume seats (scout, reviewer, sentinel, executor,
   mutation-tester, revenger, simplifier, scribe, labrat) run on
-  `subagentDefaultModel` — `gpt-5.1-codex-mini` under the shipped template.
+  `openai-codex/gpt-5.1-codex-mini`, passed explicitly at spawn:
+  `subagentDefaultModel` is declared in settings but NOT honored by
+  `rlm.spawn` on 0.10.0 — children inherit the parent model instead
+  (upstream issue #921; `verification/smoke-test.log`, finding F1).
   Hard-reasoning seats (planner, critic, connector, distiller) run
   `xai/grok-4.7` at `thinking='xhigh'`. Resolve exact selectors with
   `rlm.find_models(query)` before the wave; never hardcode a guess.

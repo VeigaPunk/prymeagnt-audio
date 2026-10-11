@@ -25,8 +25,9 @@ Configuration and skills for a [prime-agent](https://github.com/PrimeIntellect-a
     never scalar scores).
 
 Evidence for every claim about prime-agent behavior lives in
-[docs/capability-survey.md](docs/capability-survey.md) (the B0100 survey) and
-[config/NOTES.md](config/NOTES.md).
+[docs/capability-survey.md](docs/capability-survey.md) (the B0100 survey),
+[config/NOTES.md](config/NOTES.md), and the live verification log
+[verification/smoke-test.log](verification/smoke-test.log).
 
 ## Model routing
 
@@ -35,18 +36,25 @@ Evidence for every claim about prime-agent behavior lives in
 | Seat / lane | Model | Thinking | Routed by |
 |---|---|---|---|
 | L1 root session, default model | `openai-codex` / `gpt-6-sol` | `high` | `defaultProvider` + `defaultModel` + `defaultThinkingLevel` |
-| Volume RLM lanes — scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | `openai-codex` / `gpt-5.1-codex-mini` | lane's own choice | `subagentDefaultModel` (the lane omits `model=`); `auxiliaryModel` matches |
+| Volume RLM lanes — scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | `openai-codex` / `gpt-5.1-codex-mini` | lane's own choice | spawn-arg pinned — pass `model=` explicitly (settings not honored at spawn on this build; see note below) |
 | Hard-reasoning seats — planner, critic, connector, distiller | `xai` / `grok-4.7` | `xhigh` | explicit `rlm.spawn(model='xai/grok-4.7', thinking='xhigh')` per the ufo tier table |
 | Provider backup | `zai` / `glm-5.3-flash` | — | `providerBackupModel` |
 | Volume-tier capacity fallback | `zai` / `glm-5.3-flash` | — | ufo tier fallback chain |
 | Hard-tier capacity fallback | `zai` / `glm-5.3` | — | ufo tier fallback chain, then volume tier |
 
+**Note (verified on this build):** lane-tier models are spawn-arg-pinned,
+not settings-routed — `rlm.spawn` does not honor `subagentDefaultModel`
+(declared-but-unhonored on 0.10.0, upstream issue #921); volume lanes must
+pass `model='openai-codex/gpt-5.1-codex-mini'` explicitly at spawn or they
+inherit the parent model. Evidence: `verification/smoke-test.log`, finding F1.
+
 Per-spawn model resolution order (capability survey §2): explicit `model=`
-argument → `subagentDefaultModel` → parent-model inheritance. Pinning
-`subagentDefaultModel` is what keeps volume lanes cheap by default; hard seats
-always pass explicit arguments. A `thinking` level the resolved model does not
-support fails the spawn as a typed `effort_unsupported` outcome — it is never
-silently clamped.
+argument → `subagentDefaultModel` → parent-model inheritance. On this build
+the setting step is skipped in practice — spawn resolution never consults
+`subagentDefaultModel` (finding F1 above) — so the explicit argument is the
+only reliable route; hard seats always pass explicit arguments. A `thinking`
+level the resolved model does not support fails the spawn as a typed
+`effort_unsupported` outcome — it is never silently clamped.
 
 Other managed keys: `rlmMaxDepth: 3` (ufo needs ≥ 2 so the executor's depth-2
 `labrat` can spawn; `rlmMaxDepth` is daemon-enforced),

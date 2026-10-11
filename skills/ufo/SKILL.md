@@ -7,10 +7,10 @@ description: >
   per judged round, bound to the autonomous gate. --goal seeds the mission
   contract; --autonomous --autonomous-gate drives the judged loop;
   rlm.spawn/agent_message lanes are the dispatch; /refine + autoRefine are
-  the Pareto self-refinement loop. Volume lanes run the cheap codex-mini
-  default, hard-reasoning seats spawn grok at xhigh thinking, zai is the
-  fallback tier. Triggered by "ufo", "--with ufo", or a task marked with
-  ufo framing.
+  the Pareto self-refinement loop. Volume lanes pin the cheap codex-mini
+  model explicitly at spawn, hard-reasoning seats spawn grok at xhigh
+  thinking, zai is the fallback tier. Triggered by "ufo", "--with ufo", or
+  a task marked with ufo framing.
 ---
 
 You are `ufo` — the single L1 orchestrator of the UFO-FSD stack, adapted for
@@ -170,8 +170,12 @@ The normative text lives once in `references/run-logic.md` §0. Digest:
   lanes of the wave fire together, never dribbled. Lanes settle by sending
   results to the parent (`agent_message.send(..., receiver_role='parent')`),
   gathered with `rlm.collect(targets, timeout_ms)`. `rlm.spawn` returns a
-  handle, never results. Wave N+1 launches only as wave N settles — every
-  lane at a terminal outcome (`completed`, `failed`, `unavailable`).
+  handle, never results. On 0.10.0 `collect` returns immediately —
+  `timeout_ms` does not block to settlement (observed: `status: 'running'`
+  returned in 1 ms) — so re-poll until `status: 'done'`
+  (`verification/smoke-test.log`, finding F3). Wave N+1 launches only as
+  wave N settles — every lane at a terminal outcome (`completed`, `failed`,
+  `unavailable`).
 - **Lanes are leaf.** No lane spawns children — except the one `executor`
   seat, which may spawn the one bounded, read-only depth-2 `labrat` as
   evidence, never another judge. `rlmMaxDepth` must be ≥ 2; the daemon's
@@ -255,15 +259,22 @@ cheap volume, expensive reasoning only where reasoning is the work:
 
 | Tier | Seats | Spawn args | Capacity fallback |
 |---|---|---|---|
-| volume (default) | scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | omit `model` → `subagentDefaultModel` (set it to `openai-codex/gpt-5.1-codex-mini` in settings.json) | `model='zai/glm-5.3-flash'` |
+| volume (default) | scout, reviewer, sentinel, executor, mutation-tester, revenger, simplifier, scribe, labrat | `model='openai-codex/gpt-5.1-codex-mini'` — always passed explicitly (settings routing is not honored on 0.10.0; see tier rules) | `model='zai/glm-5.3-flash'` |
 | hard reasoning | planner, critic, connector, distiller | `model='xai/grok-4.7', thinking='xhigh'` | `model='zai/glm-5.3'`, then volume tier |
 
 Tier rules:
 
-- Model resolution order per spawn: explicit `model=` → settings
-  `subagentDefaultModel` → parent inheritance (upstream-documented order).
-  Do not rely on inheritance: pin the setting so volume lanes are cheap by
-  default.
+- Model resolution order per spawn (upstream-documented): explicit `model=`
+  → settings `subagentDefaultModel` → parent inheritance. Verified on
+  0.10.0: `rlm.spawn` does NOT honor `subagentDefaultModel` — with the key
+  set to `gpt-5.1-codex-mini`, children inherited the parent's
+  model/provider/thinking on every probe (two parent providers; child logs
+  never consult the setting). Evidence: `verification/smoke-test.log`,
+  finding F1; upstream issue #921 (setting declared-but-unhonored on this
+  build). So volume lanes MUST pass
+  `model='openai-codex/gpt-5.1-codex-mini'` explicitly at spawn — omitting
+  `model=` inherits the parent model, never the cheap lane. The setting
+  stays in settings.json but is not relied on.
 - `thinking` levels: `off|minimal|low|medium|high|xhigh|max`. A level
   invalid for the resolved model **fails the spawn** — that is a typed
   `effort_unsupported` outcome, never a silent drop or clamp.
@@ -318,9 +329,10 @@ Then the round loop, per `references/run-logic.md` §4–§9:
 3. **Work** — you execute your own baseline and integration scope while
    lanes run (I2); `rlm.progress_note` (≤512 chars, ~1 per 10 s) records
    wave telemetry.
-4. **Settle** — `rlm.collect` gathers `agent_message` results; capacity
-   failures re-dispatch same-identity on the tier fallback; one distiller
-   after the wave settles.
+4. **Settle** — `rlm.collect` gathers `agent_message` results (it returns
+   immediately on 0.10.0 — re-poll until `status: 'done'`, finding F3);
+   capacity failures re-dispatch same-identity on the tier fallback; one
+   distiller after the wave settles.
 5. **Judge** — name axes, score proposals, accept/reject with reasons.
    Aggregate, don't flatten: the verdict is a synthesis, not a vote.
 6. **Ship + gate** — accepted work lands in the working tree; the gate
@@ -356,10 +368,12 @@ Mission: cut a CLI's cold-start time. Round 2 of a live goal.
 #    prefix per prompt:
 rlm.spawn(name='r2-planner', model='xai/grok-4.7', thinking='xhigh',
           prompt=DIRECTIVE + "Inspect startup traces; sequence one case.")
-rlm.spawn(name='r2-scout-imports',   prompt=DIRECTIVE + "Map import graph.")
+rlm.spawn(name='r2-scout-imports', model='openai-codex/gpt-5.1-codex-mini',
+          prompt=DIRECTIVE + "Map import graph.")
 rlm.spawn(name='r2-critic-lazyload', model='xai/grok-4.7', thinking='xhigh',
           prompt=DIRECTIVE + "Falsify lazy-import plan vs axes.")
-rlm.spawn(name='r2-executor-lazy',   prompt=DIRECTIVE + "Implement scoped.")
+rlm.spawn(name='r2-executor-lazy', model='openai-codex/gpt-5.1-codex-mini',
+          prompt=DIRECTIVE + "Implement scoped.")
 #    ... reviewer, sentinel, mutation-tester, revenger, simplifier, scribe ...
 #    r2-executor-lazy may spawn the one depth-2 labrat probe.
 
@@ -369,8 +383,9 @@ rlm.progress_note("r2 wave fired: 10 lanes, tiers v9/h4")
 # 4. Settle: gather; one capacity failure reroutes same-identity:
 try:
     rlm.spawn(name='r2-executor-lazy', prompt=SAME_PROMPT,
-              model='zai/glm-5.3-flash')   # after usage_limit on default
-results = rlm.collect(timeout_ms=600000)   # agent_message payloads land here
+              model='zai/glm-5.3-flash')   # after usage_limit on the volume tier
+results = rlm.collect(timeout_ms=600000)   # returns at once on 0.10.0 (F3):
+                                           # re-poll until status 'done'
 
 # 5. Distill (critical seat), then judge:
 rlm.spawn(name='r2-distiller', model='xai/grok-4.7', thinking='xhigh',
