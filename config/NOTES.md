@@ -88,3 +88,21 @@ backup). Backups are named `settings.json.bak-<UTC timestamp>`; two
 modifications landing in the same second get a `.N` suffix so no backup
 is ever overwritten.
 
+## Change record
+
+- 2026-10-11 (retier B0109): `subagentDefaultModel` and `auxiliaryModel`
+  moved from `gpt-5.1-codex-mini` to `gpt-6-luna`. Reason:
+  `gpt-5.1-codex-mini` is account-gated on ChatGPT-auth codex ("not
+  supported when using Codex with a ChatGPT account", verified live
+  2026-10-11), so a volume lane pinned to it could never spawn;
+  `gpt-6-luna` is verified live on this account. The two keys remain
+  declared-but-unhonored at spawn on 0.10.0 (finding F1) — lane routing
+  still happens via explicit `model=` args in the skills; the template
+  keys follow the tier table so the template stays self-consistent.
+  Live re-apply and jq verification recorded in
+  `verification/smoke-test-rerun-20261011.log`.
+  Operator override, same day: the tier target was first drafted as
+  `gpt-5.6-luna`, then the operator pinned it to `gpt-6-luna` before
+  landing (both probed live on the codex auth; `gpt-6-luna` answers
+  routing-ok).
+

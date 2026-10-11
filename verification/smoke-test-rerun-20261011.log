@@ -1,0 +1,312 @@
+# B0109 codex volume retier — smoke-test-rerun-20261011.log
+
+- Run date: 2026-10-11, 18:44–18:56 local (UTC-03:00) / 21:44–21:56 UTC
+- Executor: agent-retier (tower mission M10), worktree wt-10, branch
+  `feat/codex-volume-retier-b0109`
+- Target: prime-agent 0.10.0 (Rust build), live store `~/.prime/agent/`
+- What changed in this mission: the volume/aux tier moved from
+  `gpt-5.1-codex-mini` (account-gated on ChatGPT-auth codex: "not supported
+  when using Codex with a ChatGPT account") to `openai-codex/gpt-6-luna`.
+  Mid-mission operator override (tower inbox, 2026-10-11T21:44:11Z): the
+  tier target is **gpt-6-luna**, not the originally drafted gpt-5.6-luna;
+  everything below reflects the final gpt-6-luna state.
+- Constraint honored: the operator's live session `11767612cd2f` was never
+  touched, signalled, or stopped; `auth.json` was never read or written.
+  Every probe ran as a separate fresh session and all probe agents were
+  stopped afterwards (final `prime-agent list` shows only the operator's
+  pre-existing agent).
+- Per-test retry budget (max 2 retries) honored; every error below is
+  verbatim. Nothing was faked: the failed `-p` primary route and every
+  reroute tier are both recorded.
+
+---
+
+## Check R0 — settings template re-apply (gpt-6-luna) + jq verification
+
+Template change under test (`git diff config/settings.json`):
+
+```diff
+-  "subagentDefaultModel": "gpt-5.1-codex-mini",
+-  "auxiliaryModel": "gpt-5.1-codex-mini",
++  "subagentDefaultModel": "gpt-6-luna",
++  "auxiliaryModel": "gpt-6-luna",
+```
+
+Two applies ran: the first with the briefly-drafted gpt-5.6-luna template
+(superseded the same minute by the operator override), the second with the
+final gpt-6-luna template. Backups chain the full pre-states.
+
+Apply 1 (gpt-5.6-luna draft template, pre-override). Command:
+```
+cd /home/vgpnk/Projects/prymeagnt/.tower/worktrees/wt-10 && ./scripts/apply-settings.sh
+```
+Output:
+```
+backup written: /home/vgpnk/.prime/agent/settings.json.bak-20261011T214430Z
+settings applied: /home/vgpnk/.prime/agent/settings.json
+exit=0
+```
+Pre-apply live state snapshot (before apply 1; the M7-applied codex-mini
+state), key rows of
+`jq '{defaultProvider, defaultModel, defaultThinkingLevel, subagentDefaultModel, auxiliaryModel, providerBackupModel, rlmMaxDepth, autoRefine, agentTraces}' ~/.prime/agent/settings.json`:
+```json
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6-sol",
+  "defaultThinkingLevel": "high",
+  "subagentDefaultModel": "gpt-5.1-codex-mini",
+  "auxiliaryModel": "gpt-5.1-codex-mini",
+  "providerBackupModel": "zai/glm-5.3-flash",
+  "rlmMaxDepth": 3
+}
+```
+
+Apply 2 (final gpt-6-luna template, post-override). Command: same as above.
+Output:
+```
+backup written: /home/vgpnk/.prime/agent/settings.json.bak-20261011T214611Z
+settings applied: /home/vgpnk/.prime/agent/settings.json
+exit=0
+```
+
+Final live state. Command:
+```
+jq '{defaultProvider, defaultModel, defaultThinkingLevel, subagentDefaultModel, auxiliaryModel, providerBackupModel, rlmMaxDepth, autoRefine, agentTraces}' ~/.prime/agent/settings.json
+```
+Output:
+```json
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6-sol",
+  "defaultThinkingLevel": "high",
+  "subagentDefaultModel": "gpt-6-luna",
+  "auxiliaryModel": "gpt-6-luna",
+  "providerBackupModel": "zai/glm-5.3-flash",
+  "rlmMaxDepth": 3,
+  "autoRefine": {
+    "enabled": true,
+    "turnInterval": null,
+    "compact": null,
+    "cooldownMs": null
+  },
+  "agentTraces": {
+    "enabled": true
+  }
+}
+```
+
+No other managed key changed. Managed-key diff, pre-retier baseline
+(`settings.json.bak-20261011T214430Z`, the state before this mission's
+first apply) vs final live, unmanaged keys excluded
+(`jq -S 'del(.sessionDir,.telemetry,.onboardingCompleted,.theme,.skills,.recentModels)'`):
+```diff
+14c14
+<   "auxiliaryModel": "gpt-5.1-codex-mini",
+---
+>   "auxiliaryModel": "gpt-6-luna",
+50c50
+<   "subagentDefaultModel": "gpt-5.1-codex-mini",
+---
+>   "subagentDefaultModel": "gpt-6-luna",
+```
+Exactly the two retier keys differ; `defaultProvider`, `defaultModel`,
+`defaultThinkingLevel`, `providerBackupModel`, `rlmMaxDepth`, `autoRefine`,
+`agentTraces` are byte-identical.
+
+Unmanaged keys preserved (deep merge did not clobber them):
+```json
+{
+  "sessionDir": null,
+  "telemetry": { "enabled": null, "noticeShown": true, "localMirror": null },
+  "onboardingCompleted": null,
+  "theme": null,
+  "skills": null
+}
+```
+
+Backup chain on disk (each holds its pre-apply state; mode 0600):
+```
+-rw------- 1 vgpnk vgpnk 1574 Oct 11 17:27 ~/.prime/agent/settings.json.bak-20261011T203252Z   (M7 pre-apply, all-null original)
+-rw------- 1 vgpnk vgpnk 1711 Oct 11 17:32 ~/.prime/agent/settings.json.bak-20261011T214430Z   (pre-retier codex-mini state; holds gpt-5.1-codex-mini keys)
+-rw------- 1 vgpnk vgpnk 1699 Oct 11 18:44 ~/.prime/agent/settings.json.bak-20261011T214611Z   (gpt-5.6-luna draft state)
+```
+
+Idempotency re-run. Command: `./scripts/apply-settings.sh` (again). Output:
+```
+settings already up to date: /home/vgpnk/.prime/agent/settings.json
+exit=0
+```
+
+**Verdict: PASS** — `subagentDefaultModel` and `auxiliaryModel` landed as
+`gpt-6-luna` in the live settings; no other managed key changed; unmanaged
+keys preserved; timestamped backups written; re-run is a no-op.
+
+---
+
+## Smoke test 1 rerun — one-shot prompt on the default model
+
+Canonical command per docs/smoke-testing.md. Attempt 1:
+```
+prime-agent -p --no-session "Reply with exactly: routing-ok"
+```
+Output (verbatim):
+```
+402 Insufficient balance (including overdraft). Please add funds to continue. Requests are authenticated by PRIME_API_KEY and billed to the personal balance unless the request includes X-Prime-Team-ID. Add funds to the selected balance. If you intended to use team billing, send X-Prime-Team-ID with the team ID and make sure that team has funds. See https://docs.primeintellect.ai/inference/troubleshooting#insufficient-funds.
+exit=1
+```
+(real 0m1.332s)
+
+Attempt 2 (retry 1, +5 s): identical verbatim 402, `exit=1` (real 0m0.649s).
+Attempt 3 (retry 2, +20 s, final): identical verbatim 402, `exit=1`
+(real 0m0.727s). Retry budget exhausted.
+
+Documented-reroute evidence (the `providerBackupModel` tier, same command
+shape as the original log's reroute check):
+```
+prime-agent -p --no-session --provider zai --model glm-5.3-flash "Reply with exactly: routing-ok"
+```
+Output (verbatim):
+```
+routing-ok
+exit=0
+```
+(real 0m6.612s)
+
+Supplementary default-route evidence from this same run (see smoke test 2):
+the smoke-2 probe PARENT session — a fresh daemon-backed session with no
+`--provider`/`--model` flags, i.e. the default route — ran the whole probe
+on the default model with zero errors. Its session log
+(`~/.prime/agent/sessions/01a12cf0-7bf9-7407-83ae-8164e48b62ef.jsonl`)
+records:
+```json
+{"type":"model_change","id":"7b86cb0b","parentId":null,"timestamp":"2026-10-11T21:48:40.318Z","provider":"openai-codex","modelId":"gpt-6-sol"}
+{"type":"thinking_level_change","id":"0bc08e66","parentId":"7b86cb0b","timestamp":"2026-10-11T21:48:40.318Z","thinkingLevel":"high"}
+```
+402 occurrences in that parent session log: **0**.
+
+**Verdict: FAIL ON PRIMARY / PASS ON REROUTE** — the `-p` one-shot primary
+route is blocked with 402 Insufficient balance (exact error above; billed
+to the personal `PRIME_API_KEY` balance per the error text), identical to
+the original log's finding F4 shape; the documented zai/glm-5.3-flash
+reroute passed cleanly. Daemon-backed sessions on the same default route
+(`openai-codex` / `gpt-6-sol` / `high`) ran fine during this same window
+(see smoke test 2), so the default-route model itself is healthy — the
+402 regressed after the tower's pre-mission probe had shown gpt-6-sol
+answering `routing-ok`; funding the personal balance is operator-owned.
+
+---
+
+## Smoke test 2 rerun — RLM spawn with explicit `model='openai-codex/gpt-6-luna'`
+
+Fresh daemon-backed headless-pty session per docs/smoke-testing.md (F2
+procedure; no `-p`). Launch command (opening prompt verbatim):
+```
+script -qec "prime-agent \"$PROMPT\"" /tmp/wt10-smoke2-luna-1.log
+```
+with
+```
+PROMPT="Run one probe and report everything verbatim. Call rlm.spawn(prompt='Reply with exactly: subagent-ok', name='smoke-probe-luna', model='openai-codex/gpt-6-luna'). Then call rlm.collect(timeout_ms=120000) and re-poll it until status is done (collect returns immediately on 0.10.0, so poll it in a loop). Print the child reply verbatim, plus every piece of evidence of which provider and model the child ran on: the spawn handle model field, the child session log model_change events, and the rlm-subagent.json entry for the child."
+```
+
+Session ids: parent agent `f51e53a5f9d7` (daemon-backed, default route),
+spawned child `29a1b0d1d3a6` (`smoke-probe-luna`). Parent session id
+`01a12cf0-7bf9-7407-83ae-8164e48b62ef`; child artifacts under
+`~/.prime/agent/session-artifacts/01a12cf0-7bf9-7407-83ae-8164e48b62ef/sub-9c052ecd/`.
+
+`prime-agent list` mid-run (probe working):
+```
+name              id            status   age  model                    messages  clients
+                  f51e53a5f9d7  working  0s   openai-codex/gpt-6-sol   19        1
+                  11767612cd2f  idle     1h   openai-codex/gpt-6-sol   0         1
+smoke-probe-luna  29a1b0d1d3a6  idle     30s  openai-codex/gpt-6-luna  0         0
+```
+
+Spawn handle `model` (from the parent's verbatim report):
+```
+openai-codex/gpt-6-luna
+```
+
+Child registry `rlm-subagent.json` (verbatim):
+```json
+{"type":"rlm_subagent","childId":"sub-9c052ecd","sessionName":"smoke-probe-luna","sessionDir":"/home/vgpnk/.prime/agent/session-artifacts/01a12cf0-7bf9-7407-83ae-8164e48b62ef/sub-9c052ecd","sessionFile":"/home/vgpnk/.prime/agent/session-artifacts/01a12cf0-7bf9-7407-83ae-8164e48b62ef/sub-9c052ecd/01a12cf0-9671-7672-bb8f-7eee4cb71a40.jsonl","prompt":"Reply with exactly: subagent-ok","model":{"provider":"openai-codex","modelId":"gpt-6-luna"},"status":"completed","createdAt":1791755327068}
+```
+
+Child session log events (verbatim; the child log contains **zero** `402`
+entries):
+```json
+{"type":"model_change","id":"92d7336d","parentId":null,"timestamp":"2026-10-11T21:48:47.092Z","provider":"openai-codex","modelId":"gpt-6-luna"}
+{"type":"thinking_level_change","id":"b1258d2d","parentId":"92d7336d","timestamp":"2026-10-11T21:48:47.092Z","thinkingLevel":"high"}
+{"type":"service_tier_change","id":"99754952","parentId":"b1258d2d","timestamp":"2026-10-11T21:48:47.092Z","serviceTier":"default"}
+```
+
+Collect re-poll discipline (F3): the parent polled `rlm.collect` in a
+loop — intermediate polls returned with `answer_preview=None` and an
+ascending `duration_ms` ladder (12475, 15666, 20612, 26021, 28016, 29751,
+32926, 35976, 39387, 44871, 48297, 53732, 55306, 56937) until settlement;
+one earlier quick poll (`duration_ms=5676`) also appears in the transcript.
+Final collect (verbatim from the parent transcript):
+```
+status='done', settled=True, answer_preview='subagent-ok', error=None, duration_ms=64069
+```
+
+Child reply (arrived via `agent_message` → `rlm.collect`, verbatim):
+```
+subagent-ok
+```
+
+Cleanup: `prime-agent stop f51e53a5f9d7` → `ok`; the child was already torn
+down with its parent (`prime-agent stop 29a1b0d1d3a6` → `Error: Unknown
+active session: 29a1b0d1d3a6`, i.e. not active). Final `prime-agent list`:
+```
+name  id            status  age  model                   messages  clients
+      11767612cd2f  idle    1h   openai-codex/gpt-6-sol  0         1
+```
+Only the operator's pre-existing agent remains; it was never touched.
+
+**Verdict: PASS** — the explicit spawn-arg pinned the child to
+`openai-codex/gpt-6-luna`; the child completed on luna with three
+independent evidence sources agreeing (spawn handle model field, child
+session log `model_change`, `rlm-subagent.json` registry), collected
+`done`/`settled: True`/`error: None` after re-polling, and replied
+`subagent-ok`. Note: the child also confirmed the F1 behavior — it
+inherited the parent's `thinkingLevel: high` (settings `subagentDefaultModel`
+/`auxiliaryModel` are still declared-but-unhonored at spawn on 0.10.0);
+the retier lives in the explicit `model=` args, exactly as the skills
+document.
+
+---
+
+## Findings / notes from this rerun
+
+- **Operator override honored:** the tier target changed mid-mission from
+  gpt-5.6-luna to gpt-6-luna (tower inbox, 21:44:11Z). All repo literals,
+  the live settings, and the smoke-2 spawn arg use gpt-6-luna; both the
+  tower and this run probed gpt-6-luna live (routing-ok / subagent-ok).
+- **The `-p` 402 regressed again after the tower's pre-mission probe:**
+  the tower had verified `openai-codex/gpt-6-sol` answering `routing-ok`
+  shortly before this mission; by run time (21:47–21:49Z) the `-p` path
+  402'd on every attempt (personal `PRIME_API_KEY` balance, per the error
+  text). Daemon-backed sessions on the same default route ran fine
+  throughout (smoke-2 parent, 42 messages, zero 402s) — consistent with
+  the original log's F4 and suggesting the `-p` billing path differs from
+  daemon sessions. Funding the personal balance remains operator-owned.
+- **F1/F2/F3 disciplines reconfirmed:** settings keys still not honored at
+  spawn (child pinned via explicit `model=`, inherited parent thinking);
+  headless-pty daemon-backed session required for `rlm.spawn`;
+  `rlm.collect` re-polled until `done`.
+
+## Environment notes
+
+- Probe agents created and stopped during this run: `f51e53a5f9d7`
+  (smoke-2 parent, default route), `29a1b0d1d3a6` (`smoke-probe-luna`,
+  torn down with its parent). The headless-pty wrapper was killed after
+  the stop.
+- The operator's session `11767612cd2f` was idle throughout and was never
+  signalled, steered, or stopped. `auth.json` was never read or written.
+- Raw evidence locations: parent transcript
+  `~/.prime/agent/sessions/01a12cf0-7bf9-7407-83ae-8164e48b62ef.jsonl`;
+  child artifacts
+  `~/.prime/agent/session-artifacts/01a12cf0-7bf9-7407-83ae-8164e48b62ef/sub-9c052ecd/`
+  (`rlm-subagent.json`, child session jsonl); live settings
+  `~/.prime/agent/settings.json` (+ backup chain listed in check R0).
+- Run completed 2026-10-11T21:53:47Z.

@@ -40,8 +40,9 @@ execution; reviewer/critic class → economy, fallback fast). Every spawn
 passes `model=` explicitly: on prime-agent 0.10.0 `rlm.spawn` does not honor
 `subagentDefaultModel`, so an omitted `model=` inherits the parent model,
 never the cheap lane — volume and economy lanes pass
-`model='openai-codex/gpt-5.1-codex-mini'` verbatim
-(`verification/smoke-test.log`, finding F1; upstream issue #921). Results
+`model='openai-codex/gpt-6-luna'` verbatim (retiered 2026-10-11 from
+`gpt-5.1-codex-mini`: account-gated on ChatGPT-auth codex;
+`verification/smoke-test.log`, finding F1; upstream issue #921). Results
 never return from `spawn`; they arrive via `agent_message`. An L2 lane you
 did not spawn is `not-dispatched` — never fabricated.
 
