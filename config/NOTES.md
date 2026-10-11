@@ -25,10 +25,9 @@ error text):
 
 `autoRefine` is an object: `{enabled, turnInterval, compact, cooldownMs}`
 — field names confirmed in upstream types.rs per the capability survey,
-§3.3 (`surveys/capability-survey.md`; the survey file lives at
-`/tmp/capability-survey-b0100.md` until the docs mission lands it in the
-repo). The template ships the house style of explicit nulls:
-`enabled: true` turns auto-refinement on; the other three stay `null` so
+§3.3 (`docs/capability-survey.md`). The template ships the house style of
+explicit nulls: `enabled: true` turns auto-refinement on; the other three
+stay `null` so
 prime-agent's own defaults apply for the turn interval, post-compaction
 trigger, and cooldown. Supporting evidence in the same section: trigger
 paths `crates/pa-core/src/session_engine/auto_refine_trigger.rs` and
@@ -58,10 +57,12 @@ Evidence:
 - `~/.prime/agent/skills/` does not exist on a fresh install; the script
   creates it when the agent dir exists.
 
-The capability survey (mission M1) is confirming the exact discovery path
-in parallel. If it lands on a different directory, pass it as the first
-argument — the script never guesses beyond the default above and fails
-loudly when the agent dir itself is absent.
+The capability survey (M1, landed as `docs/capability-survey.md`, §1.1)
+confirms the default above — `~/.prime/agent/skills/<name>/` is the
+personal/global discovery root. If a future survey revision lands on a
+different directory, pass it as the first argument — the script never
+guesses beyond the default above and fails loudly when the agent dir
+itself is absent.
 
 ## Scripts: constraints honored
 
