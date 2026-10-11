@@ -21,15 +21,24 @@ error text):
 - `agentTraces` is an object: `{"enabled": true}` — matches both the live
   file and `struct AgentTracesSettings with 1 element` in the binary.
 
-## autoRefine — scalar `true`, watch this one
+## autoRefine — object form (resolved by capability survey §3.3)
 
-The tower directive pins the template value to `true`, and the live file's
-`autoRefine` slot is a scalar `null`. However the binary also contains
-`struct AutoRefineSettings with 4 elements`, so the product may expect an
-object (the binary does not reveal the four field names). The template
-ships `true` as directed. If a future prime-agent build rejects the scalar
-on load, flip the template to the object form the binary expects and re-run
-`scripts/apply-settings.sh` — the merge makes that a one-line change.
+`autoRefine` is an object: `{enabled, turnInterval, compact, cooldownMs}`
+— field names confirmed in upstream types.rs per the capability survey,
+§3.3 (`surveys/capability-survey.md`; the survey file lives at
+`/tmp/capability-survey-b0100.md` until the docs mission lands it in the
+repo). The template ships the house style of explicit nulls:
+`enabled: true` turns auto-refinement on; the other three stay `null` so
+prime-agent's own defaults apply for the turn interval, post-compaction
+trigger, and cooldown. Supporting evidence in the same section: trigger
+paths `crates/pa-core/src/session_engine/auto_refine_trigger.rs` and
+`crates/pa-daemon/src/compact_autorefine.rs`, and the boundary message
+"N assistant turns since last auto-refine review".
+
+An earlier revision of this branch shipped scalar `true` per the tower's
+initial directive; it was replaced with the object form before merge so
+the live settings file cannot hit a deserialize failure or a silently
+ignored scalar.
 
 ## Skill discovery path (install-skills.sh default)
 

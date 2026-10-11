@@ -6,7 +6,12 @@
   "auxiliaryModel": "gpt-5.1-codex-mini",
   "providerBackupModel": "zai/glm-5.3-flash",
   "rlmMaxDepth": 3,
-  "autoRefine": true,
+  "autoRefine": {
+    "enabled": true,
+    "turnInterval": null,
+    "compact": null,
+    "cooldownMs": null
+  },
   "agentTraces": {
     "enabled": true
   }
