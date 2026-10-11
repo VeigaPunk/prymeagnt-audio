@@ -1,0 +1,315 @@
+# B0106 install & smoke verification — smoke-test.log
+
+- Run date: 2026-10-11, 17:32–17:50 local (UTC-03:00) / 20:32–20:50 UTC
+- Executor: agent-verify (tower mission M7), worktree wt-7
+- Target: prime-agent 0.10.0 (Rust build), live store `~/.prime/agent/`
+- Constraint honored: operator had a live TUI session on the shared daemon
+  (agent `11767612cd2f`) — never touched; every probe ran as a separate
+  fresh session and all probe agents were stopped afterwards.
+- Per-test retry budget (max 2 retries) honored; every error below is
+  verbatim. Nothing was faked: failed primary routes and every reroute
+  tier are both recorded.
+
+---
+
+## Check 0a — apply-settings.sh (install check)
+
+Command:
+```
+cd /home/vgpnk/Projects/prymeagnt/.tower/worktrees/wt-7 && ./scripts/apply-settings.sh
+```
+Output:
+```
+backup written: /home/vgpnk/.prime/agent/settings.json.bak-20261011T203252Z
+settings applied: /home/vgpnk/.prime/agent/settings.json
+exit=0
+```
+
+## Check 0b — required keys reflect the routing goal
+
+Command:
+```
+jq '{defaultProvider, defaultModel, defaultThinkingLevel, subagentDefaultModel, auxiliaryModel, providerBackupModel, rlmMaxDepth, autoRefine, agentTraces}' ~/.prime/agent/settings.json
+```
+Output:
+```json
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6-sol",
+  "defaultThinkingLevel": "high",
+  "subagentDefaultModel": "gpt-5.1-codex-mini",
+  "auxiliaryModel": "gpt-5.1-codex-mini",
+  "providerBackupModel": "zai/glm-5.3-flash",
+  "rlmMaxDepth": 3,
+  "autoRefine": {
+    "enabled": true,
+    "turnInterval": null,
+    "compact": null,
+    "cooldownMs": null
+  },
+  "agentTraces": {
+    "enabled": true
+  }
+}
+```
+Preserved-key spot check (deep merge did not clobber unmanaged keys):
+```json
+{
+  "sessionDir": null,
+  "telemetry": { "enabled": null, "noticeShown": true, "localMirror": null },
+  "onboardingCompleted": null,
+  "theme": null,
+  "skills": null
+}
+```
+
+**Verdict: PASS** — all 8 required keys match the goal (gpt-6-sol default,
+high thinking, gpt-5.1-codex-mini subagent/aux, zai/glm-5.3-flash backup,
+rlmMaxDepth 3, autoRefine.enabled true; agentTraces.enabled true).
+
+## Check 0c — timestamped backup exists
+
+```
+-rw------- 1 vgpnk vgpnk 1574 Oct 11 17:27 /home/vgpnk/.prime/agent/settings.json.bak-20261011T203252Z
+```
+Backup content check (`jq '{defaultModel, defaultProvider}'` on the .bak)
+confirms it holds the pre-apply state.
+
+**Verdict: PASS**
+
+## Check 0d — install-skills.sh
+
+Command:
+```
+cd /home/vgpnk/Projects/prymeagnt/.tower/worktrees/wt-7 && ./scripts/install-skills.sh
+```
+Output:
+```
+installed skill: godspeed -> /home/vgpnk/.prime/agent/skills/godspeed
+installed skill: shokunin -> /home/vgpnk/.prime/agent/skills/shokunin
+installed skill: ufo -> /home/vgpnk/.prime/agent/skills/ufo
+done: 3 skill(s) installed into /home/vgpnk/.prime/agent/skills
+exit=0
+```
+
+**Verdict: PASS**
+
+## Check 0e — skill discovery by prime-agent
+
+Command:
+```
+prime-agent prompt 2>/dev/null | grep -nE 'godspeed|shokunin|ufo'
+```
+Output (fresh process, discovery from the install path):
+```
+263:    <name>godspeed</name>
+266:    <location>/home/vgpnk/.prime/agent/skills/godspeed/SKILL.md</location>
+269:    <name>shokunin</name>
+272:    <location>/home/vgpnk/.prime/agent/skills/shokunin/SKILL.md</location>
+275:    <name>ufo</name>
+278:    <location>/home/vgpnk/.prime/agent/skills/ufo/SKILL.md</location>
+```
+
+**Verdict: PASS** — all three repo skills discovered from
+`~/.prime/agent/skills/` (descriptions match the repo SKILL.md files).
+
+---
+
+## Smoke test 1 — one-shot prompt on the default model
+
+Attempt 1 (primary route). Command:
+```
+prime-agent -p --no-session "Reply with exactly: routing-ok"
+```
+Output (verbatim):
+```
+402 Insufficient balance (including overdraft). Please add funds to continue. Requests are authenticated by PRIME_API_KEY and billed to the personal balance unless the request includes X-Prime-Team-ID. Add funds to the selected balance. If you intended to use team billing, send X-Prime-Team-ID with the team ID and make sure that team has funds. See https://docs.primeintellect.ai/inference/troubleshooting#insufficient-funds.
+exit=1
+```
+
+Attempt 2 (documented fallback tier, `providerBackupModel` target). Command:
+```
+prime-agent -p --no-session --provider zai --model glm-5.3-flash "Reply with exactly: routing-ok"
+```
+Output (verbatim):
+```
+routing-ok
+exit=0
+```
+
+**Verdict: PASS ON REROUTE / FAIL ON PRIMARY** — the primary route
+(openai-codex → gpt-6-sol) is quota-blocked with 402 Insufficient balance
+(exact error above); the run rerouted to `zai/glm-5.3-flash` and the
+reroute passed cleanly. The response path itself (auth, request, reply)
+works end-to-end on the fallback tier.
+
+---
+
+## Smoke test 2 — RLM subagent spawn (rlm.spawn → rlm.collect)
+
+Attempt 1 (`-p` primary, per docs/smoke-testing.md). Command:
+```
+prime-agent -p --no-session "Spawn a subagent with rlm.spawn(prompt='Reply with exactly: subagent-ok', name='smoke-probe'). Do not pass model or thinking. Then call rlm.collect(timeout_ms=120000) and print the child's reply verbatim, plus whatever the reply/session shows about which model the child ran on."
+```
+Output: same verbatim `402 Insufficient balance …` error as test 1, `exit=1`.
+
+Attempt 2 (`-p`, root rerouted to zai). Command: same prompt with
+`--provider zai --model glm-5.3-flash`. Output (key lines verbatim):
+```
+RuntimeError: rlm.spawn requires a daemon-backed session: this session has no RLM child runtime
+```
+(The root model call succeeded; the spawn itself was refused by the RLM
+host. `rlm.list_subagents()` → `[]`, `rlm.collect(timeout_ms=0)` → `[]`,
+`agent_observe.list` likewise unavailable:
+`RuntimeError: host request type "agent_observe.list" is not available in this session`.)
+
+Attempt 3 (`-p` with explicit daemon socket of the running daemon).
+Command: same prompt plus
+`--daemon-socket /tmp/prime-agent-rust-1000/daemon.sock --provider zai --model glm-5.3-flash`.
+Output (key lines verbatim): identical refusals —
+```
+RuntimeError: rlm.spawn requires a daemon-backed session: this session has no RLM child runtime
+rlm.create_session requires a daemon-backed depth-0 session
+```
+Conclusion: `-p` sessions never get the RLM child runtime, regardless of
+daemon socket — the doc's `-p` form of this test cannot pass on 0.10.0.
+
+Attempt 4 — the doc's documented interactive equivalent ("open prime-agent,
+then give the same instruction in chat"), run as a fresh headless TUI
+session in a pty on the shared daemon (separate agent from the operator's;
+stopped afterwards), root on zai since codex is quota-blocked. Command:
+```
+prime-agent --provider zai --model glm-5.3-flash 'Run two probes in order and report both verbatim.
+Probe A: call rlm.spawn(prompt="Reply with exactly: subagent-ok", name="smoke-probe") with NO model and NO thinking arguments. Then call rlm.collect(timeout_ms=120000). Print the child reply verbatim, plus any info the handle/reply/session shows about which model and thinking level the child ran on.
+…'
+```
+(session `01a12cb2-9908-766c-8982-17ff003546a0`). Output (verbatim from
+the session transcript):
+
+Spawn handle:
+```
+rlm_child_id: sub-c0db53e3
+name: smoke-probe
+session_dir: /home/vgpnk/.prime/agent/session-artifacts/01a12cb2-9908-766c-8982-17ff003546a0/sub-c0db53e3
+model: zai/glm-5.3-flash
+```
+Final collect:
+```
+rlm_child_id: 'sub-c0db53e3'
+session_name: 'smoke-probe'
+status: 'done'
+settled: True
+answer_preview: 'Replied to the parent with exactly: `subagent-ok`. Task complete; going idle.'
+error: None
+duration_ms: 64696
+```
+Child reply (arrived via agent_message → collect): `subagent-ok`
+Child session log model events:
+```
+{"type":"model_change", "provider":"zai", "modelId":"glm-5.3-flash"}
+{"type":"thinking_level_change", "thinkingLevel":"high"}
+{"type":"service_tier_change", "serviceTier":"default"}
+```
+Subagent registry (`rlm-subagent.json`):
+```json
+{"type":"rlm_subagent","childId":"sub-c0db53e3","sessionName":"smoke-probe","prompt":"Reply with exactly: subagent-ok","model":{"provider":"zai","modelId":"glm-5.3-flash"},"status":"completed"}
+```
+Child log contains **zero** 402 entries and no codex attempt — the child
+went straight to the inherited model.
+
+Disambiguation probe (is the child's zai model a quota reroute of
+`subagentDefaultModel`, or is the setting ignored?): identical one-shot
+spawn with the parent on a different provider,
+`prime-agent --provider kimi-coding --model kimi-for-coding '…rlm.spawn(prompt="Reply with exactly: subagent-ok", name="smoke-probe-2") with NO model and NO thinking arguments…'`
+(session `01a12cb7-6618-7568-87f0-6873eecb53cd`). Output (verbatim):
+```
+subagent-ok            (child reply, via agent_message)
+handle.model: kimi-coding/kimi-for-coding
+status: done, settled: True, error: None, duration_ms: 65942
+```
+The child again inherited the parent model. `subagentDefaultModel`
+(gpt-5.1-codex-mini) was not resolved in either run.
+
+**Verdict: SPLIT —**
+- Spawn mechanism (`rlm.spawn` → `agent_message` → `rlm.collect`, depth-1
+  under `rlmMaxDepth: 3`): **PASS** — child spawned, replied
+  `subagent-ok`, collected `done`/`settled`/`error: None`, twice.
+- Expected subagent-model routing (child resolves to
+  `gpt-5.1-codex-mini` when no model is passed): **FAIL** — children
+  inherit the parent's model and thinking regardless of
+  `subagentDefaultModel` (verified with two different parent providers;
+  child logs show the setting was never consulted). The observed runs are
+  therefore parent-inheritance, not a backup reroute of the codex-mini
+  lane. See Findings F1.
+
+---
+
+## Smoke test 3 — refine.status() / refine surface
+
+Attempt 1 (`-p` primary, per docs/smoke-testing.md). Command:
+```
+prime-agent -p --no-session "Call refine.status() and print the returned object verbatim."
+```
+Output: same verbatim `402 Insufficient balance …` error, `exit=1`.
+
+Attempt 2 (`-p`, root on zai). Command: same prompt with
+`--provider zai --model glm-5.3-flash`. Output (verbatim):
+```
+<coroutine object status at 0x7f63b8c3b280>
+```
+then
+```
+RuntimeError: host request type "refine.status" is not available in this session
+```
+(`-p` sessions lack the refine host surface, same root cause as test 2.)
+
+Attempt 3 — same fresh daemon-backed TUI session as test 2 attempt 4
+(root zai), Probe B. Output (verbatim from the session transcript):
+```
+{'pending': False, 'in_flight': False}
+```
+
+**Verdict: PASS** — the refine surface responds in a real (daemon-backed)
+session with the expected `{pending, in_flight}` shape (both false on a
+fresh machine — responding at all is the point). Recorded honestly: the
+`-p` form given in docs/smoke-testing.md cannot exercise it (see F2).
+
+---
+
+## Findings (outside M7 scope — filed to the tower, not fixed here)
+
+- **F1 — `subagentDefaultModel` is not honored by spawn resolution** on
+  prime-agent 0.10.0: with the key set to `gpt-5.1-codex-mini` and
+  `rlm.spawn` called with no `model=`, children inherited the parent's
+  provider/model/thinking in both probes (zai parent → zai child;
+  kimi-coding parent → kimi-coding child); child session logs contain no
+  attempt to resolve the setting. Volume-lane routing to codex-mini does
+  not happen via this key on this build.
+- **F2 — `-p` sessions have no daemon-backed host surface**: `rlm.spawn`,
+  `rlm.create_session`, `refine.status`, `agent_observe.*` all refuse with
+  "requires a daemon-backed session" / "host request type … is not
+  available in this session", even with `--daemon-socket` pointed at the
+  live daemon. docs/smoke-testing.md's `-p` commands for tests 2 and 3
+  cannot pass as written; the interactive-session equivalents work.
+- **F3 — `rlm.collect(timeout_ms=…)` does not block** to settlement as
+  documented: first call returned in `duration_ms: 1` with
+  `status: 'running'`; callers must re-poll (both probes settled only
+  after ~65 s of polling).
+- **F4 — openai-codex provider is quota-blocked** (402 Insufficient
+  balance, verbatim under test 1): affects the default route (gpt-6-sol),
+  the auxiliary/subagent lane (gpt-5.1-codex-mini) and every codex model
+  until the personal balance is funded or team billing (X-Prime-Team-ID)
+  is configured. The zai tier (`glm-5.3-flash`) passes; the kimi-coding
+  tier also passed in the disambiguation probe.
+
+## Environment notes
+
+- Settings/skill changes were picked up by fresh processes only; the
+  operator's live session was never signalled, steered, or stopped.
+- Probe agents created and stopped during this run: `783acace8531`,
+  `eea1ec9b1965` (test 2/3 TUI run), `75bc239e6cc8` (smoke-probe-2),
+  `8096e12303c4` (its parent). Final `prime-agent list` shows only the
+  operator's pre-existing agent `11767612cd2f`.
+- Raw captures referenced by this log were taken from live command output
+  and the session transcripts under `~/.prime/agent/sessions/` and
+  `~/.prime/agent/session-artifacts/` of the named session ids.
