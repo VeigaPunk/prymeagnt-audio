@@ -1,0 +1,37 @@
+{
+ "schema": "prime-agent-shokunin-v1",
+ "roster": {
+  "harness-integrity": {
+   "rank": "shokunin",
+   "province": ".shokunin/harness-integrity/PROVINCE.md",
+   "axes": [
+    "depth",
+    "calibration"
+   ],
+   "harness_spec": "global:primeagent-harness-integrity",
+   "promotion_round": 4
+  },
+  "rlm-dispatch": {
+   "rank": "shokunin",
+   "province": ".shokunin/rlm-dispatch/PROVINCE.md",
+   "axes": [
+    "operability",
+    "calibration"
+   ],
+   "harness_spec": "global:primeagent-rlm-dispatch",
+   "promotion_round": 4
+  }
+ },
+ "rounds": [
+  {
+   "round": 22,
+   "date": "2026-10-12",
+   "type": "mint",
+   "minted": [
+    "audio"
+   ],
+   "promotions": [],
+   "notes": "Explicit operator directive: third new shokunin lane \u2014 audio (SFX + soundtrack production for games, verified by headless analysis). Mint evidence .shokunin/mints/audio.md; roster rejection scan recorded there (five prior lanes reject audio production); probation, zero verified rounds; no roster row until promotion."
+  }
+ ]
+}
