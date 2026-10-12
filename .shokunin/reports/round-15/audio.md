@@ -1,0 +1,17 @@
+# Audio round 15 — 180 Hz internal side-slope control
+
+Work commit `ea01255` by `audio-shokunin <audio@shokunin.local>`; this final report is written and committed **after** work. Before-state `0928e9e`. Independent replay `.shokunin/audio/reports/round-15/r15-verifier.md`; Sol verdict `r15-adjudicator.md`. Wave scopes, exact commands/exits, receipts, exploratory failed fits, and the corrected worker count-direction error are in `.shokunin/audio/LOG.md` and the ten scoped reports.
+
+## Measured move and limits
+- Added opt-in `--probe-layer-alt-slope` original 4s/48kHz mono PCM16 scratch `live/round-15/slope180_probe.wav`, SHA-256 **`b1678716839c2fada2a46f6771039c758500ac5621e9e874122930177cf4ac57`**, byte-identical to selected worker scratch. Relative to source-generated canonical `stem_layer_alt.wav`, **only frame 96001 changes 39→52 signed PCM counts (+13)**. The executor's first report reversed direction; actual WAV bytes controlled the correction. Unused +16-count alternative and failed exploratory fits were not credited.
+- Non-author runner receipt `corpus/live/runs/20261012T184818195955Z-layer-alt-slope/measurements.json` exited **1** solely for decoded internal side-slope mismatch **.001251220703125 FS/sample** (> existing strict .001). Internal adjacent gap **.0003662109375 FS** (<= .03); valid 180Hz component amplitudes `.014999921578770435/.04999787182121829` FS give **10.457250605879763 dB** contrast (>=6). Centroid 303.7177950169356Hz and generic/outer checks pass. Reused all local thresholds; equality at .001 would pass, but no boundary control was tested.
+- Independent serial `python3 .shokunin/audio/corpus/fixtures/measure_audio.py` flags none/`--probe-layer-alt-slope`/`--probe-layer-alt-join`/`--probe-layer-alt-flat`/`--probe-layer-slope`/`--probe-layer-join`/`--probe-flat`/`--probe-layer-flat`/`--probe-slope`/`--probe-failing`/`--probe-invalid`/none restore exited **0/1/1/1/1/1/1/1/1/1/1/0** without setup errors. Receipts under `corpus/live/runs/<id>/measurements.json`: `20261012T184817402790Z-normal`, `184818195955Z-layer-alt-slope`, `184819001822Z-layer-alt-join`, `184819795852Z-layer-alt-flat`, `184820584760Z-layer-slope`, `184821377846Z-layer-join`, `184822168475Z-flat`, `184822958807Z-layer-flat`, `184823723496Z-slope`, `184824448802Z-failing`, `184824678600Z-invalid`, `184825401717Z-normal`. Prior failure sets remain, normal/restore parsed JSON equal, 12 canonical WAV hashes match `0928e9e` Git blobs, and five `_alt` comparisons pass.
+
+## Per-axis decision
+| axis | verdict | basis |
+|---|---|---|
+| depth | **improved narrowly** | matched single-frame 180Hz slope-only negative exercises existing internal side-slope rejection while internal gap, 180Hz contrast, generic and outer gates pass |
+| coverage | **unchanged** | twelve canonical WAVs and five variants unchanged; scratch is not playable content |
+| calibration | **unchanged** | existing `.001` FS/sample slope, `.03` FS gap and 6dB local contrast bounds not retuned or perceptually calibrated |
+
+Admit with no demonstrated harm inside the deterministic fixture/toolchain scope; no scalar score. Numeric isolation does not establish an audible click, music suitability, diverse-signal robustness, engine/adaptive playback, strict external JSON compatibility, security, rights beyond original synthetic generation, or production quality. `SHONEN` box 4 remains **open** pending whole-lane historical review. Only `.shokunin/audio/**` and `.shokunin/reports/**` changed; no MANIFEST edit, push, merge or publication.
