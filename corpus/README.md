@@ -16,3 +16,5 @@ ledger in .shokunin/MANIFEST.json there.
 
 Upstream: https://github.com/VeigaPunk/prymeagnt-audio — local execution
 references it with: git fetch audio main
+
+Refreshed 2026-10-12 from lane tip after wrap-up (final lane round: audio).
